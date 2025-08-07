@@ -26,7 +26,7 @@ An MCP (Model Context Protocol) server that integrates with Fathom AI's meeting 
 
 1. **Clone and setup**:
 ```bash
-git clone https://github.com/yourusername/mcp-fathom-server.git
+git clone https://github.com/sourcegate/mcp-fathom-server.git
 cd mcp-fathom-server
 npm install
 npm run build
@@ -132,7 +132,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 If you encounter any issues:
 1. Check the [troubleshooting section](#-troubleshooting)
-2. Search existing [GitHub issues](https://github.com/yourusername/mcp-fathom-server/issues)
+2. Search existing [GitHub issues](https://github.com/sourcegate/mcp-fathom-server/issues)
 3. Create a new issue with detailed information about your problem
 
 ---
