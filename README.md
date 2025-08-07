@@ -137,4 +137,4 @@ If you encounter any issues:
 
 ---
 
-Built with ❤️ for the Claude MCP ecosystem
+Built for fun by [@petesena](https://twitter.com/petesena) ❤️
