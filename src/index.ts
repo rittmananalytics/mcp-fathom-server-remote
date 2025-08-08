@@ -6,7 +6,11 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
   ListToolsRequest,
-  CallToolRequest
+  CallToolRequest,
+  ListResourcesRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequest,
+  ListPromptsRequest
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
@@ -47,7 +51,9 @@ const server = new Server({
   version: "1.0.0"
 }, {
   capabilities: {
-    tools: {}
+    tools: {},
+    resources: {},
+    prompts: {}
   }
 });
 
@@ -64,6 +70,15 @@ server.setRequestHandler(ListToolsRequestSchema, async (request: ListToolsReques
       inputSchema: zodToJsonSchema(SearchMeetingsSchema)
     }
   ]
+}));
+
+// Add stub handlers for resources and prompts to prevent "Method not found" errors
+server.setRequestHandler(ListResourcesRequestSchema, async (request: ListResourcesRequest) => ({
+  resources: []
+}));
+
+server.setRequestHandler(ListPromptsRequestSchema, async (request: ListPromptsRequest) => ({
+  prompts: []
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
