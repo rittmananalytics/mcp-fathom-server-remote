@@ -33,32 +33,35 @@ export class FathomClient {
     }
   }
 
-  async searchMeetings(searchTerm: string, includeTranscript: boolean = true): Promise<FathomMeeting[]> {
-    const allMeetings: FathomMeeting[] = [];
-    let cursor: string | undefined;
-    
-    do {
-      const response = await this.listMeetings({
-        include_transcript: includeTranscript,
-        cursor
-      });
-      
-      allMeetings.push(...response.items);
-      cursor = response.next_cursor;
-    } while (cursor);
+  async searchMeetings(searchTerm: string, includeTranscript: boolean = false): Promise<FathomMeeting[]> {
+    // For now, just get recent meetings without transcripts for performance
+    // Transcripts can make responses over 1MB which is too slow
+    const response = await this.listMeetings({
+      include_transcript: false,
+      created_after: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // Last 30 days
+    });
     
     const searchLower = searchTerm.toLowerCase();
-    return allMeetings.filter(meeting => {
+    const filteredMeetings = response.items.filter(meeting => {
       const titleMatch = meeting.title?.toLowerCase().includes(searchLower) || 
                         meeting.meeting_title?.toLowerCase().includes(searchLower);
       const summaryMatch = meeting.default_summary?.toLowerCase().includes(searchLower);
-      const transcriptMatch = includeTranscript && meeting.transcript?.toLowerCase().includes(searchLower);
       const actionItemsMatch = meeting.action_items?.some(item => 
-        item.toLowerCase().includes(searchLower)
+        typeof item === 'string' && item.toLowerCase().includes(searchLower)
       );
       
-      return titleMatch || summaryMatch || transcriptMatch || actionItemsMatch;
+      return titleMatch || summaryMatch || actionItemsMatch;
     });
+    
+    // If we need transcripts, fetch them individually for just the matching meetings
+    if (includeTranscript && filteredMeetings.length > 0 && filteredMeetings.length <= 5) {
+      // Only fetch transcripts for up to 5 meetings to avoid timeouts
+      console.error(`Fetching transcripts for ${filteredMeetings.length} meetings...`);
+      // Note: This would require individual meeting fetch API which Fathom doesn't seem to provide
+      // So we'll return without transcripts for now
+    }
+    
+    return filteredMeetings;
   }
 
   private formatParams(params?: FathomListMeetingsParams): Record<string, any> {

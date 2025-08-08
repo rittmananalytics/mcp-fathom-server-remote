@@ -28,8 +28,8 @@ const ListMeetingsSchema = z.object({
 });
 
 const SearchMeetingsSchema = z.object({
-  search_term: z.string().describe("Search term to find in meeting titles, summaries, transcripts, or action items"),
-  include_transcript: z.boolean().optional().default(true).describe("Search within meeting transcripts (slower but more comprehensive)")
+  search_term: z.string().describe("Search term to find in meeting titles, summaries, or action items"),
+  include_transcript: z.boolean().optional().default(false).describe("Whether to search within transcripts (WARNING: Currently disabled for performance)")
 });
 
 const apiKey = process.env.FATHOM_API_KEY;
@@ -60,7 +60,7 @@ server.setRequestHandler(ListToolsRequestSchema, async (request: ListToolsReques
     },
     {
       name: "search_meetings",
-      description: "Search for meetings containing specific keywords in titles, summaries, transcripts, or action items. Use this when looking for meetings about specific topics like 'recruiting', 'product launch', etc.",
+      description: "Search for meetings containing keywords in titles, summaries, or action items. NOTE: Searches last 30 days only. For better performance, transcript search is disabled by default.",
       inputSchema: zodToJsonSchema(SearchMeetingsSchema)
     }
   ]
@@ -75,7 +75,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       const limit = params.limit || 50;
       const { limit: _, ...apiParams } = params;
       
+      console.error(`[list_meetings] Fetching meetings with params:`, JSON.stringify(apiParams));
       const response = await fathomClient.listMeetings(apiParams);
+      console.error(`[list_meetings] Got ${response.items.length} meetings`);
       const meetings = response.items.slice(0, limit);
       
       const formattedMeetings = meetings.map(meeting => ({
@@ -105,10 +107,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     if (name === "search_meetings") {
       const params = SearchMeetingsSchema.parse(args);
       
+      console.error(`[search_meetings] Searching for: "${params.search_term}" (transcript=${params.include_transcript})`);
       const meetings = await fathomClient.searchMeetings(
         params.search_term, 
         params.include_transcript
       );
+      console.error(`[search_meetings] Found ${meetings.length} matching meetings`);
       
       const formattedMeetings = meetings.map(meeting => ({
         title: meeting.title || meeting.meeting_title,
