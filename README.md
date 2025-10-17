@@ -31,7 +31,7 @@ A Model Context Protocol (MCP) server that integrates with [Fathom AI](https://f
 
 1. **Clone and build**:
    ```bash
-   git clone https://github.com/sourcegate/mcp-fathom-server.git
+   git clone https://github.com/rittmananalytics/mcp-fathom-server-remote.git
    cd mcp-fathom-server
    npm install
    npm run build
