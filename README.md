@@ -7,6 +7,8 @@
 
 A Model Context Protocol (MCP) server that integrates with [Fathom AI](https://fathom.video)'s meeting platform, enabling Claude to search, analyze, and summarize your meeting transcripts through natural language queries.
 
+Repo originally forked from [https://github.com/sourcegate/mcp-fathom-server](https://github.com/sourcegate/mcp-fathom-server) and then extended to include transcript searching and deployment to Cloud Run.
+
 ## ✨ Features
 
 - **🔍 Full Transcript Search**: Search within actual meeting transcripts (not just titles/summaries)
