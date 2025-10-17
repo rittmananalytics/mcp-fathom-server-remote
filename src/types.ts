@@ -16,6 +16,7 @@ export interface FathomMeeting {
   default_summary?: string;
   action_items?: string[];
   crm_matches?: any[];
+  recording_id?: string;
 }
 
 export interface FathomListMeetingsParams {
@@ -35,4 +36,59 @@ export interface FathomListMeetingsResponse {
   items: FathomMeeting[];
   limit: number;
   next_cursor?: string;
+}
+
+export interface FathomTeam {
+  id: string;
+  name: string;
+  created_at: string;
+  member_count?: number;
+}
+
+export interface FathomListTeamsResponse {
+  items: FathomTeam[];
+  next_cursor?: string;
+}
+
+export interface FathomTeamMember {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+  joined_at?: string;
+}
+
+export interface FathomListTeamMembersParams {
+  team_id: string;
+  cursor?: string;
+}
+
+export interface FathomListTeamMembersResponse {
+  items: FathomTeamMember[];
+  next_cursor?: string;
+}
+
+export interface FathomWebhook {
+  id: string;
+  url: string;
+  created_at: string;
+  include_transcript?: boolean;
+  include_summary?: boolean;
+  include_action_items?: boolean;
+}
+
+export interface FathomCreateWebhookParams {
+  url: string;
+  include_transcript?: boolean;
+  include_summary?: boolean;
+  include_action_items?: boolean;
+}
+
+export interface FathomCreateWebhookResponse {
+  webhook: FathomWebhook;
+  secret: string;
+}
+
+export interface FathomDeleteWebhookParams {
+  webhook_id: string;
 }

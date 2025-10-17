@@ -32,8 +32,30 @@ const ListMeetingsSchema = z.object({
 });
 
 const SearchMeetingsSchema = z.object({
-  search_term: z.string().describe("Search term to find in meeting titles, summaries, or action items"),
-  include_transcript: z.boolean().optional().default(false).describe("Whether to search within transcripts (WARNING: Currently disabled for performance)")
+  search_term: z.string().describe("Search term to find in meeting titles, summaries, action items, or transcripts"),
+  include_transcript: z.boolean().optional().default(true).describe("Search within full meeting transcripts (default: true). When enabled, fetches and searches transcripts of up to 10 recent meetings. Use this for semantic queries like 'discussed pricing' or 'talked about Claude Code'.")
+});
+
+const GetMeetingTranscriptSchema = z.object({
+  recording_id: z.string().describe("The recording ID of the meeting"),
+  summarize: z.boolean().optional().default(false).describe("Whether to return a request for Claude to summarize the transcript")
+});
+
+const ListTeamsSchema = z.object({});
+
+const ListTeamMembersSchema = z.object({
+  team_id: z.string().describe("The ID of the team to list members for")
+});
+
+const CreateWebhookSchema = z.object({
+  url: z.string().describe("The URL to send webhook notifications to"),
+  include_transcript: z.boolean().optional().default(false).describe("Include meeting transcripts in webhook payload"),
+  include_summary: z.boolean().optional().default(true).describe("Include meeting summaries in webhook payload"),
+  include_action_items: z.boolean().optional().default(true).describe("Include action items in webhook payload")
+});
+
+const DeleteWebhookSchema = z.object({
+  webhook_id: z.string().describe("The ID of the webhook to delete")
 });
 
 const apiKey = process.env.FATHOM_API_KEY;
@@ -48,7 +70,7 @@ const fathomClient = new FathomClient(apiKey);
 
 const server = new Server({
   name: "mcp-fathom-server",
-  version: "1.0.0"
+  version: "2.0.0"
 }, {
   capabilities: {
     tools: {},
@@ -66,8 +88,33 @@ server.setRequestHandler(ListToolsRequestSchema, async (request: ListToolsReques
     },
     {
       name: "search_meetings",
-      description: "Search for meetings containing keywords in titles, summaries, or action items. NOTE: Searches last 30 days only. For better performance, transcript search is disabled by default.",
+      description: "Search for meetings containing keywords in titles, summaries, action items, AND full transcripts (default). Searches last 30 days. By default, fetches and searches transcripts of up to 10 recent meetings. Best for semantic queries like 'discussed pricing' or 'talked about Claude Code' where the topic may not appear in titles/summaries.",
       inputSchema: zodToJsonSchema(SearchMeetingsSchema)
+    },
+    {
+      name: "get_meeting_transcript",
+      description: "Get the full transcript of a specific meeting by recording ID. Useful for detailed analysis or summarization of meeting content.",
+      inputSchema: zodToJsonSchema(GetMeetingTranscriptSchema)
+    },
+    {
+      name: "list_teams",
+      description: "List all teams accessible to the authenticated user.",
+      inputSchema: zodToJsonSchema(ListTeamsSchema)
+    },
+    {
+      name: "list_team_members",
+      description: "List all members of a specific team.",
+      inputSchema: zodToJsonSchema(ListTeamMembersSchema)
+    },
+    {
+      name: "create_webhook",
+      description: "Create a webhook to receive real-time notifications when new meetings are ready. Returns webhook ID and secret for verification.",
+      inputSchema: zodToJsonSchema(CreateWebhookSchema)
+    },
+    {
+      name: "delete_webhook",
+      description: "Delete an existing webhook by its ID.",
+      inputSchema: zodToJsonSchema(DeleteWebhookSchema)
     }
   ]
 }));
@@ -99,6 +146,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         title: meeting.title || meeting.meeting_title,
         date: meeting.scheduled_start_time || meeting.created_at,
         url: meeting.share_url || meeting.url,
+        recording_id: meeting.recording_id,
         attendees: meeting.calendar_invitees,
         recorded_by: meeting.recorded_by,
         summary: meeting.default_summary,
@@ -121,27 +169,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     
     if (name === "search_meetings") {
       const params = SearchMeetingsSchema.parse(args);
-      
+
       console.error(`[search_meetings] Searching for: "${params.search_term}" (transcript=${params.include_transcript})`);
       const meetings = await fathomClient.searchMeetings(
-        params.search_term, 
+        params.search_term,
         params.include_transcript
       );
       console.error(`[search_meetings] Found ${meetings.length} matching meetings`);
-      
+
       const formattedMeetings = meetings.map(meeting => ({
         title: meeting.title || meeting.meeting_title,
         date: meeting.scheduled_start_time || meeting.created_at,
         url: meeting.share_url || meeting.url,
+        recording_id: meeting.recording_id,
         attendees: meeting.calendar_invitees,
         recorded_by: meeting.recorded_by,
         summary: meeting.default_summary,
         action_items: meeting.action_items,
-        relevance: params.include_transcript && meeting.transcript?.toLowerCase().includes(params.search_term.toLowerCase()) 
-          ? "Found in transcript" 
+        transcript: params.include_transcript ? meeting.transcript : undefined,
+        relevance: params.include_transcript && meeting.transcript?.toLowerCase().includes(params.search_term.toLowerCase())
+          ? "Found in transcript"
           : "Found in title/summary"
       }));
-      
+
       return {
         content: [{
           type: "text",
@@ -153,7 +203,109 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }]
       };
     }
-    
+
+    if (name === "get_meeting_transcript") {
+      const params = GetMeetingTranscriptSchema.parse(args);
+
+      console.error(`[get_meeting_transcript] Fetching transcript for recording: ${params.recording_id}`);
+      const transcript = await fathomClient.getMeetingTranscript(params.recording_id);
+      console.error(`[get_meeting_transcript] Got transcript (${transcript.length} characters)`);
+
+      // Handle empty transcript
+      if (!transcript || transcript.length === 0) {
+        return {
+          content: [{
+            type: "text",
+            text: `No transcript available for recording ${params.recording_id}. The meeting may still be processing, or transcription may not be available.`
+          }]
+        };
+      }
+
+      return {
+        content: [{
+          type: "text",
+          text: params.summarize
+            ? `Please summarize this meeting transcript:\n\n${transcript}`
+            : transcript
+        }]
+      };
+    }
+
+    if (name === "list_teams") {
+      console.error(`[list_teams] Fetching teams`);
+      const response = await fathomClient.listTeams();
+      console.error(`[list_teams] Got ${response.items.length} teams`);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            total_teams: response.items.length,
+            teams: response.items,
+            has_more: !!response.next_cursor
+          }, null, 2)
+        }]
+      };
+    }
+
+    if (name === "list_team_members") {
+      const params = ListTeamMembersSchema.parse(args);
+
+      console.error(`[list_team_members] Fetching members for team: ${params.team_id}`);
+      const response = await fathomClient.listTeamMembers({ team_id: params.team_id });
+      console.error(`[list_team_members] Got ${response.items.length} members`);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            team_id: params.team_id,
+            total_members: response.items.length,
+            members: response.items,
+            has_more: !!response.next_cursor
+          }, null, 2)
+        }]
+      };
+    }
+
+    if (name === "create_webhook") {
+      const params = CreateWebhookSchema.parse(args);
+
+      console.error(`[create_webhook] Creating webhook for URL: ${params.url}`);
+      const response = await fathomClient.createWebhook(params);
+      console.error(`[create_webhook] Created webhook: ${response.webhook.id}`);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            webhook: response.webhook,
+            secret: response.secret,
+            note: "Save this secret securely - it's needed to verify webhook signatures and won't be shown again."
+          }, null, 2)
+        }]
+      };
+    }
+
+    if (name === "delete_webhook") {
+      const params = DeleteWebhookSchema.parse(args);
+
+      console.error(`[delete_webhook] Deleting webhook: ${params.webhook_id}`);
+      await fathomClient.deleteWebhook(params);
+      console.error(`[delete_webhook] Deleted webhook: ${params.webhook_id}`);
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            webhook_id: params.webhook_id,
+            message: "Webhook deleted successfully"
+          }, null, 2)
+        }]
+      };
+    }
+
     throw new Error(`Unknown tool: ${name}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
